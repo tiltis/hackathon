@@ -84,11 +84,10 @@
             valZ_abs.innerText = absZ.toFixed(2);
             valZ_rel.innerText = data.z.toFixed(2);
 
-            // 1. 위치 업데이트
+    
             cube.position.set(data.x * S, data.y * S, -absZ * S);
 
-            // 2. 기울기 제어 (쿼터니언 적용)
-            // 파이썬에서 보내준 qx, qy, qz, qw를 직접 주입하네.
+
             if(data.qw !== undefined) {
                 cube.quaternion.set(data.qx, data.qy, data.qz, data.qw);
             }
@@ -96,7 +95,7 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            // 자전 기능(cube.rotation.y += 0.01)은 손 데이터와 충돌하므로 제거했네.
+
             renderer.render(scene, camera);
         }
         animate();
@@ -108,4 +107,5 @@
         });
     </script>
 </body>
+
 </html>
