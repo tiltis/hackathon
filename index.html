@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>3D Hand Tracker - Precise HUD & Rotation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        #hud {
+            position: fixed; top: 20px; left: 20px;
+            color: #ffffff; font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.7); padding: 15px;
+            border-radius: 8px; border: 1px solid #00ff00; z-index: 100;
+        }
+        .val { color: #0ff; font-weight: bold; }
+        .label { color: #0f0; font-size: 11px; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div class="label">SYSTEM STATUS: FULL TRACKING</div>
+        <hr border="0.1" style="border-color:#333; margin-bottom:10px;">
+        <div>X-pos: <span id="valX" class="val">0.00</span> cm</div>
+        <div>Y-pos: <span id="valY" class="val">0.00</span> cm</div>
+        <div style="border-top: 1px solid #333; margin-top: 5px; padding-top: 5px;">
+            <div>Dist (from Cam): <span id="valZ_abs" class="val">30.00</span> cm</div>
+            <div style="font-size: 11px; color: #888;">Rel (from Grid): <span id="valZ_rel">0.00</span> cm</div>
+        </div>
+    </div>
+
+    <script>
+        const valX = document.getElementById('valX');
+        const valY = document.getElementById('valY');
+        const valZ_abs = document.getElementById('valZ_abs');
+        const valZ_rel = document.getElementById('valZ_rel');
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const S = 3.5;
+        const GRID_Z = 30;
+
+        // 그리드 설정
+        const grid = new THREE.GridHelper(400, 40, 0x00ff00, 0x444444);
+        grid.position.set(0, 0, -GRID_Z * S);
+        scene.add(grid);
+
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(400, 400),
+            new THREE.MeshPhongMaterial({ color: 0x111111, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(0, -0.1, -GRID_Z * S);
+        scene.add(floor);
+
+        // 상자 설정
+        const cube = new THREE.Mesh(
+            new THREE.BoxGeometry(12, 12, 12),
+            new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 100 })
+        );
+        scene.add(cube);
+
+        // 조명 설정
+        const light = new THREE.PointLight(0xffffff, 1.5, 1000);
+        light.position.set(50, 200, 100);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+        camera.position.set(0, 100, 100);
+        camera.lookAt(0, 0, -GRID_Z * S);
+
+        const socket = io('http://127.0.0.1:5001', { transports: ['websocket'] });
+
+        socket.on('hand_update', (data) => {
+            // HUD 업데이트 (z_cam 기준)
+            const absZ = data.z;
+
+            valX.innerText = data.x.toFixed(2);
+            valY.innerText = data.y.toFixed(2);
+            valZ_abs.innerText = absZ.toFixed(2);
+            valZ_rel.innerText = data.z.toFixed(2);
+
+            // 1. 위치 업데이트
+            cube.position.set(data.x * S, data.y * S, -absZ * S);
+
+            // 2. 기울기 제어 (쿼터니언 적용)
+            // 파이썬에서 보내준 qx, qy, qz, qw를 직접 주입하네.
+            if(data.qw !== undefined) {
+                cube.quaternion.set(data.qx, data.qy, data.qz, data.qw);
+            }
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // 자전 기능(cube.rotation.y += 0.01)은 손 데이터와 충돌하므로 제거했네.
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
